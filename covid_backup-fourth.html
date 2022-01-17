@@ -1,0 +1,300 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Ronith's Final Data Viz</title>
+    
+    <style>
+        /* CSS Graphic Styles go here */
+        body {text-align: center}
+        svg {border: 2px solid}
+        circle {opacity: 0.6}
+        
+        #controls {
+            position: absolute;
+            top: 100px;
+            left: 20px;
+            width: 300px;
+            font-size: 12px;
+            text-align: center;
+        }
+		
+		#controls button {
+			border-radius: 10px;
+			background-color: transparent;
+			margin: 2px;
+			padding: 4px;
+		}
+		
+		#controls button:hover {
+			cursor: pointer;
+			background-color: #aaa;
+		}
+        
+        #info {position: absolute; font-size: 10px; background: rgba(250,250,250,0.5); border: 1px solid #ddd; padding:2px;}
+    </style>
+    
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+    <script type="application/javascript">
+        /* variables, javascript and D3 functions go here */
+        let FIPScode;
+        let countyPop;
+        let allData = [];
+        let data;	// to hold the data
+		let viz;
+        
+        getData = () => {
+            d3.csv("data/FIPS_Codes.csv").then( (csvdata) => {
+                FIPScode = csvdata;
+                draw();
+            })
+//            d3.csv("data/FIPS_code.csv")
+//                .then((csvdata) => {
+//                    data = csvdata;   	// store the data in a global variable so you can see it later
+//                    draw();     		// call a function to draw things (defined below)
+//            });   
+        }        
+        getDataAll = () => {
+			Promise.all(
+				[
+					// get multiple files
+                    d3.csv("data/FIPS_codes.csv"),
+                    d3.csv("data/county_politics.csv"),
+					d3.csv("data/county_income.csv"),
+                    d3.csv("data/county_population.csv"),
+                    //d3.csv("data/cumulative_us-counties.csv"),
+                    d3.csv("data/total_us-counties.csv"),
+					d3.csv("data/county_maskuse.csv"),
+				]
+			).then((allCSVData) => {
+				// could do this with a loop or other approaches too.  Here just to show it explicily.
+				allData[0] = allCSVData[0];
+				allData[1] = allCSVData[1];
+				allData[2] = allCSVData[2];
+				allData[3] = allCSVData[3];
+				allData[4] = allCSVData[4];
+				allData[5] = allCSVData[5];
+                //allData[6] = allCSVData[6];
+				draw(allData[0]);	// now pass which one we want to draw initially.
+			})
+		}
+        
+        getIncome = (datum) => {
+                let obj = allData[2].find( d => d.fips == Number(datum));
+                if (typeof obj == 'undefined'){
+                    console.log("Income not found for", datum);
+                    return 24700;
+                }
+                else{
+                    return Number(obj["Median_Household_Income_2019"].replace(/,/g, ''));
+                }                    
+            }
+        getPolitics = (datum) => {
+                let obj = allData[1].find( d => d.fips == Number(datum));
+                if (typeof obj == 'undefined'){
+                    console.log("Politics not found for", datum);
+                    return 0;
+                }
+                else{
+                    return Number(obj["per_point_diff"]);
+                }                     
+            }
+        getPopulation = (datum) => {
+                let obj = allData[3].find( d => d.fips == Number(datum));
+                if (typeof obj == 'undefined'){
+                    console.log("Population not found for", datum);
+                    return 0;
+                }
+                else{
+                    return Number(obj["POP_ESTIMATE_2019"].replace(/,/g, ''));
+                }                    
+            }
+        getCOVID = (datum) => {
+                let obj = allData[4].find( d => d.fips == Number(datum));
+                if (typeof obj == 'undefined'){
+                    console.log("COVID Cases not found for", datum);
+                    return 0;
+                }
+                else{
+                    return Number(obj["cases"]);
+                }                    
+            }
+        getCasesPop = (datum) => {
+                let cases = getCOVID(datum);
+                let pop = getPopulation(datum);
+                if (pop === 0){
+                    return 0
+                }
+                else{
+                    return cases/pop;
+                }
+                
+            }
+        getCovidRating = (datum) => {
+                let obj = allData[5].find( d => d.fips == Number(datum));
+                if(typeof obj == 'undefined'){
+                    return 0;
+                }
+                let res = 4 * obj["ALWAYS"] + 2 * obj["FREQUENTLY"] - 2 * obj["RARELY"] - 40 * obj["NEVER"];
+                return res;
+            }
+            
+        showAll = () => {
+                circles.style("opacity", "");
+            }
+        dimAll = () => {
+                circles.style("opacity", "0.05");
+            }
+            
+        showState = (abr) => {
+                if(abr == ""){
+                    showAll();
+                }
+                else{
+                    dimAll();
+                    circles.filter (d => d["State"] == abr).style("opacity", "");
+                }
+            }
+        showByPop= (min, max) => {
+	           dimAll();
+	           circles.filter(d => {
+                   var pop = getPopulation(d["FIPS"]);
+                   if (pop >= min && pop < max){
+                       return true;
+                   }
+                   return false;   
+               }).style("opacity","");
+            }
+            
+        toNum = (text) => Number(text.replace(/,/g,''));
+            
+//            extentIncome = d3.extent(allData[2], d => toNum(d["Median_Household_Income_2019"]));
+//            extentPolitics = d3.extent(allData[1], d => toNum(d["per_point_diff"]));
+//            // extent population will also include the population of the states as it exists in the csv file
+//            extentPopulation = d3.extent(allData[3], d => toNum(d["POP_ESTIMATE_2019"]));
+//            extentCOVID = d3.extent(allData[4], d => toNum(d["cases"]));
+//            
+//            console.log(extentIncome);
+//            console.log(extentPolitics);
+//            console.log(extentPopulation);
+//            console.log(extentCOVID);
+//        random = (num) => {
+//            
+//        }
+        
+        draw = (data) => {
+            /* Instructions to draw stuff using the data you got above */
+            let viz = d3.select("#finalProject");
+            vizWidth = Number(viz.attr("width"));
+			vizHeight = Number(viz.attr("height"));
+            maxPointSize = 50;
+            rScale = 1;
+            
+            
+            
+            //xAxis = 50;
+            //yAxis = 50;
+            
+            //allData[0].find( d => d.FIPS == "1025") 
+            
+            //Median_Household_Income_2019
+            // 24700 152000
+            scaleIncome = d3.scaleLinear()
+                .domain([24000, 160000])
+                .range([0, vizHeight]);
+            
+            //per_point_diff
+            scalePolitics = d3.scaleLinear()
+                .domain([-1, 1])
+                .range([0, vizWidth]);
+            
+            //d3.scaleSymlog()
+            //max population is San bernadino w 2.5 million
+            scalePopulation = d3.scaleLinear()
+                .domain([0, 900])
+                .range([0, maxPointSize]);
+            
+            
+            scaleCOVID = d3.scaleLinear()
+                .domain([0, 1235411])
+                .range([0, maxPointSize]);
+            
+            scaleCasesPop = d3.scaleLinear()
+                .domain([0, 0.7])
+                .range([0, maxPointSize]);
+            
+            scaleCovidRating = d3.scaleLinear()
+                .domain([-4, 0, 4])
+                .range(['orange', '#ddd', 'green']);
+            
+            //rFromArea = (area) Math.sqrt(area/Math.PI);
+            
+            
+            //d => scaleIncome(getIncome(d)
+            //.replace(/,/g, '')
+            circles = viz.selectAll("circle")
+                .data(data)
+                .join("circle")
+                    .attr("cx", d => scalePolitics(getPolitics(d["FIPS"])))
+//            d => scalePolitics(getPolitics(d["FIPS"]))
+                    .attr("cy", d => scaleIncome(getIncome(d["FIPS"]))) //d => data[3].find( d.fips == "")
+//            d => scaleIncome(getIncome(d["FIPS"]))
+                    .attr("r", d => scaleCasesPop(getCasesPop(d["FIPS"]))*rScale)
+//            d => scalePopulation(getPopulation(d["FIPS"]))
+//            d => scalePopulation(Math.sqrt(getPopulation(d["FIPS"])/Math.PI))*rScale)
+//             d => scaleCOVID(getCOVID(d["FIPS"]))
+//                    d => scaleCasesPop(getCasesPop(d["FIPS"]))
+                    .attr("class", d => d["State"])
+                    .style("fill", d => scaleCovidRating(getCovidRating(d["FIPS"])))
+                    .on("mouseover", highlight)
+					.on("mouseout", unhighlight);
+
+        // create a dropdown select list from all of the states in the data
+			stateSelects = d3.select("#states").selectAll("option")
+				.data(d3.group(data, d=>d["State"]).keys())
+				.join("option")
+					.text(d => d);
+            
+        showAll(); // Needed for when reset button is clicked
+        
+        //copied from online
+        //https://stackoverflow.com/questions/7871425/is-there-a-way-to-zoom-into-a-d3-force-layout-graph
+        }
+         highlight = (evt,d) => {
+			thisElem = evt.currentTarget;
+			d3.select(thisElem).style("stroke","yellow").style("stroke-width","2");
+			d3.select("#info").text(d["FIPS"]).style("top",evt.y + "px").style("left",evt.x + "px").style("visibility","visible");
+			//d3.select("#plantName").attr("x",thisElem.getAttribute("cx")).attr("y",thisElem.getAttribute("cy")).text(d["Plant name"]);
+		}
+		
+		unhighlight = (evt) => {
+			d3.select(evt.currentTarget).style("stroke","").style("stroke-width","");
+			d3.select("#info").style("visibility","hidden");
+		}    
+    </script>
+</head>
+<body onload="getDataAll()">
+    <!--HTML and SVG page objects go here-->
+    <h2>Counties: COVID, Politics, and Income --- Fourth</h2>
+    <svg id="finalProject" width="1000" height="1000"></svg>
+    <div id="controls">
+		<div>
+            <button onclick="showByPop(0, 15500)" class="small-counties">Small Counties</button>
+            <button onclick="showByPop(15501, 46000)" class="medium-counties">Medium Counties</button>
+            <button onclick="showByPop(46001, 11000000)" class="large-counties">Large Counties</button>
+            <br /><br />
+			<button onclick="dimAll()">Dim All</button>
+			<button onclick="showAll()">Show All</button>
+			<br /><br />
+			Choose a state: <select id="states" onchange="showState(this.value)"></select>
+            <br /><br />
+            
+            <br /><br />
+            <button onclick="getDataAll()" class="reset">Reset</button>
+		</div>
+			
+	</div>
+	
+	<div id="info"></div>
+</body>
+</html>
