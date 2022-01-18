@@ -1,3 +1,5 @@
+Check the demo link on the left hand side or click [here](https://romantic-torvalds-449387.netlify.app/covid.html)
+
 # COVID_Visualization
 Ronith Ranjan's COVID visualization looking at income, political viewpoints, and mask usage by county
 
